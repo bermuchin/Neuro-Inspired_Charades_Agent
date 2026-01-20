@@ -181,38 +181,77 @@ face_options = vision.FaceLandmarkerOptions(
     num_faces=3, min_face_detection_confidence=0.5, min_tracking_confidence=0.5,
     result_callback=face_callback)
 
-# webcam 
-cap = cv2.VideoCapture(0)
-timestamp = 0
+def run_webcam():
+    """웹캠을 실행하고 스페이스바를 누르면 finger count를 반환"""
+    global current_mode
 
-with vision.PoseLandmarker.create_from_options(pose_options) as pose_lm, \
-     vision.HandLandmarker.create_from_options(hand_options) as hand_lm, \
-     vision.FaceLandmarker.create_from_options(face_options) as face_lm:
+    cap = cv2.VideoCapture(0)
+    timestamp = 0
+    returned_finger_count = None
 
-    while cap.isOpened():
-        success, frame = cap.read()
-        if not success:
-            continue
+    with vision.PoseLandmarker.create_from_options(pose_options) as pose_lm, \
+         vision.HandLandmarker.create_from_options(hand_options) as hand_lm, \
+         vision.FaceLandmarker.create_from_options(face_options) as face_lm:
 
-        h, w, _ = frame.shape
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame_rgb)
+        while cap.isOpened():
+            success, frame = cap.read()
+            if not success:
+                continue
 
-        timestamp = int(time.time() * 1000)
-        pose_lm.detect_async(mp_image, timestamp)
-        hand_lm.detect_async(mp_image, timestamp)
-        face_lm.detect_async(mp_image, timestamp)
+            h, w, _ = frame.shape
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame_rgb)
 
-        skeleton = draw_all(h, w)
-        cv2.imshow('Skeleton', skeleton)
+            timestamp = int(time.time() * 1000)
+            pose_lm.detect_async(mp_image, timestamp)
+            hand_lm.detect_async(mp_image, timestamp)
+            face_lm.detect_async(mp_image, timestamp)
 
-        key = cv2.waitKey(5) & 0xFF
-        if key == ord('q'):
-            break
-        elif key == ord('1'):
-            current_mode = 1
-        elif key == ord('2'):
-            current_mode = 2
+            skeleton = draw_all(h, w)
+            cv2.imshow('Skeleton', skeleton)
 
-cap.release()
-cv2.destroyAllWindows()
+            key = cv2.waitKey(5) & 0xFF
+            if key == ord('q'):
+                break
+            elif key == ord('1'):
+                current_mode = 1
+            elif key == ord('2'):
+                current_mode = 2
+            elif key == ord(' '):
+                # 현재 손가락 개수를 가져와서 config.py에 저장
+                fingers = get_total_fingers()
+
+                # config.py 파일 경로
+                config_path = os.path.join(os.path.dirname(__file__), 'config.py')
+
+                # config.py 파일을 읽어서 LATEST_FINGER_COUNT 업데이트
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+
+                # LATEST_FINGER_COUNT 값 업데이트
+                for i, line in enumerate(lines):
+                    if line.startswith('LATEST_FINGER_COUNT'):
+                        lines[i] = f'LATEST_FINGER_COUNT = {fingers}\n'
+                        break
+
+                # 파일에 다시 쓰기
+                with open(config_path, 'w', encoding='utf-8') as f:
+                    f.writelines(lines)
+
+                print(f"Finger count {fingers} saved to config.py")
+
+                # 반환할 값 저장
+                returned_finger_count = fingers
+
+                # 웹캠 종료
+                break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+    return returned_finger_count
+
+if __name__ == "__main__":
+    finger_count = run_webcam()
+    if finger_count is not None:
+        print(f"Returned finger count: {finger_count}")
