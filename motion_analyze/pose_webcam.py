@@ -65,15 +65,9 @@ def face_callback(result, output_image, timestamp_ms):
 
 
 current_mode = 2
-countdown_active = False
-countdown_start = 0
-captured_number = None
-capture_time = 0
-
 def count_fingers(hand_landmarks, handedness):
     if not hand_landmarks:
         return 0
-
     fingers = []
 
     thumb_tip = hand_landmarks[4]
@@ -147,42 +141,44 @@ def draw_body_hands(canvas, h, w):
                     cv2.line(canvas, (int(pt1.x*w), int(pt1.y*h)), (int(pt2.x*w), int(pt2.y*h)), color, 2)
 
 def draw_all(h, w):
-    global current_mode, countdown_active, countdown_start, captured_number, capture_time
+    global current_mode
     canvas = np.zeros((h, w, 3), dtype=np.uint8)
 
     if current_mode == 1:
         draw_face(canvas, h, w)
-        label = "Mode 1: Face"
+        label = "(1) Face"
     else:
         draw_body_hands(canvas, h, w)
-        label = "Mode 2: Body + Hands"
+        label = "(2) Body + Hands"
 
-    cv2.putText(canvas, label, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-    cv2.putText(canvas, "Press 1/2: switch | SPACE: capture", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (150, 150, 150), 1)
+    flipped = cv2.flip(canvas, 1)
+    cv2.putText(flipped, label, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+    cv2.putText(flipped, "Press 1/ 2 to swtich", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (150, 150, 150), 1)
 
     # finger 
     if current_mode == 2:
         fingers = get_total_fingers()
-        cv2.putText(canvas, f"Fingers: {fingers}", (w - 200, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+        cv2.putText(flipped, f"Fingers: {fingers}", (w - 200, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
 
-    return canvas
+    return flipped
+    #return cv2.flip(canvas, 1)
 
 pose_options = vision.PoseLandmarkerOptions(
     base_options=python.BaseOptions(model_asset_path=POSE_MODEL),
     running_mode=vision.RunningMode.LIVE_STREAM,
-    num_poses=1, min_pose_detection_confidence=0.5, min_tracking_confidence=0.5,
+    num_poses=3, min_pose_detection_confidence=0.5, min_tracking_confidence=0.5,
     result_callback=pose_callback)
 
 hand_options = vision.HandLandmarkerOptions(
     base_options=python.BaseOptions(model_asset_path=HAND_MODEL),
     running_mode=vision.RunningMode.LIVE_STREAM,
-    num_hands=2, min_hand_detection_confidence=0.5, min_tracking_confidence=0.5,
+    num_hands=6, min_hand_detection_confidence=0.5, min_tracking_confidence=0.5,
     result_callback=hand_callback)
 
 face_options = vision.FaceLandmarkerOptions(
     base_options=python.BaseOptions(model_asset_path=FACE_MODEL),
     running_mode=vision.RunningMode.LIVE_STREAM,
-    num_faces=1, min_face_detection_confidence=0.5, min_tracking_confidence=0.5,
+    num_faces=3, min_face_detection_confidence=0.5, min_tracking_confidence=0.5,
     result_callback=face_callback)
 
 # webcam 
@@ -202,7 +198,7 @@ with vision.PoseLandmarker.create_from_options(pose_options) as pose_lm, \
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame_rgb)
 
-        timestamp += 1
+        timestamp = int(time.time() * 1000)
         pose_lm.detect_async(mp_image, timestamp)
         hand_lm.detect_async(mp_image, timestamp)
         face_lm.detect_async(mp_image, timestamp)
@@ -217,11 +213,6 @@ with vision.PoseLandmarker.create_from_options(pose_options) as pose_lm, \
             current_mode = 1
         elif key == ord('2'):
             current_mode = 2
-        elif key == ord(' ') and not countdown_active:
-            countdown_active = True
-            countdown_start = time.time()
-            captured_number = None
 
 cap.release()
 cv2.destroyAllWindows()
-
